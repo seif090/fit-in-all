@@ -30,7 +30,7 @@ export interface UserStats {
 }
 
 export interface Activity {
-  id: string;
+  id: number;
   icon: string;
   title: string;
   time: string;

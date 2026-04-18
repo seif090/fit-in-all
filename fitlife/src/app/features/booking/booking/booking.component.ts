@@ -1,5 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { BookingService, TimeSlot, Booking } from '../../../core/services/booking.service';
+
+interface CalendarDay {
+  day: number;
+  isCurrentMonth: boolean;
+  isSelected: boolean;
+  date: string;
+}
 
 @Component({
   selector: 'app-booking',
@@ -10,137 +18,286 @@ import { CommonModule } from '@angular/common';
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 class="text-3xl font-bold text-text-primary mb-8">احجز موعد</h1>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <!-- Calendar -->
-          <div class="lg:col-span-2">
-            <div class="card">
-              <div class="flex items-center justify-between mb-6">
-                <button class="p-2 hover:bg-background rounded-lg">←</button>
-                <h2 class="text-xl font-semibold">أبريل 2026</h2>
-                <button class="p-2 hover:bg-background rounded-lg">→</button>
+        @if (loading()) {
+          <div class="flex justify-center py-12">
+            <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+          </div>
+        } @else {
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Calendar -->
+            <div class="lg:col-span-2">
+              <div class="card">
+                <div class="flex items-center justify-between mb-6">
+                  <button (click)="previousMonth()" class="p-2 hover:bg-background rounded-lg">←</button>
+                  <h2 class="text-xl font-semibold">{{ currentMonthName }} {{ currentYear }}</h2>
+                  <button (click)="nextMonth()" class="p-2 hover:bg-background rounded-lg">→</button>
+                </div>
+                
+                <div class="grid grid-cols-7 gap-2 mb-4">
+                  @for (day of weekDays; track day) {
+                    <div class="text-center text-sm text-text-secondary font-medium">{{day}}</div>
+                  }
+                </div>
+                
+                <div class="grid grid-cols-7 gap-2">
+                  @for (day of calendarDays; track day.date) {
+                    <button (click)="selectDate(day)" 
+                            [class]="day.isCurrentMonth ? 'p-3 rounded-lg text-center hover:bg-primary/10 cursor-pointer' : 'p-3 rounded-lg text-center text-text-secondary hover:bg-background cursor-pointer'"
+                            [class.bg-primary]="day.isSelected"
+                            [class.text-white]="day.isSelected">
+                      {{day.day}}
+                    </button>
+                  }
+                </div>
               </div>
-              
-              <div class="grid grid-cols-7 gap-2 mb-4">
-                @for (day of weekDays; track day) {
-                  <div class="text-center text-sm text-text-secondary font-medium">{{day}}</div>
-                }
-              </div>
-              
-              <div class="grid grid-cols-7 gap-2">
-                @for (day of calendarDays; track day.date) {
-                  <button [class]="day.isCurrentMonth ? 'p-3 rounded-lg text-center hover:bg-primary/10' : 'p-3 rounded-lg text-center text-text-secondary hover:bg-background'"
-                          [class.bg-primary]="day.isSelected"
-                          [class.text-white]="day.isSelected">
-                    {{day.day}}
-                  </button>
+
+              <!-- Time Slots -->
+              <div class="card mt-6">
+                <h3 class="font-semibold mb-4">الأوقات المتاحة</h3>
+                @if (selectedDate()) {
+                  <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                    @for (slot of availableSlots(); track slot.time) {
+                      <button (click)="selectSlot(slot)"
+                              [class]="slot.isAvailable ? 'py-3 px-4 rounded-lg border border-border hover:border-primary hover:text-primary cursor-pointer' : 'py-3 px-4 rounded-lg border border-border text-text-secondary opacity-50 cursor-not-allowed'"
+                              [class.bg-primary]="slot.isSelected"
+                              [class.text-white]="slot.isSelected"
+                              [disabled]="!slot.isAvailable">
+                        {{slot.time}}
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <p class="text-text-secondary text-center py-4">الرجاء اختيار التاريخ</p>
                 }
               </div>
             </div>
 
-            <!-- Time Slots -->
-            <div class="card mt-6">
-              <h3 class="font-semibold mb-4">الأوقات المتاحة</h3>
-              <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                @for (slot of timeSlots; track slot.time) {
-                  <button [class]="slot.isAvailable ? 'py-3 px-4 rounded-lg border border-border hover:border-primary hover:text-primary' : 'py-3 px-4 rounded-lg border border-border text-text-secondary opacity-50 cursor-not-allowed'"
-                          [class.bg-primary]="slot.isSelected"
-                          [class.text-white]="slot.isSelected"
-                          [disabled]="!slot.isAvailable">
-                    {{slot.time}}
-                  </button>
-                }
+            <!-- Booking Summary -->
+            <div>
+              <div class="card sticky top-24">
+                <h3 class="font-semibold mb-4">ملخص الحجز</h3>
+                
+                <div class="border-b border-border pb-4 mb-4">
+                  <p class="text-sm text-text-secondary">الخدمة</p>
+                  <p class="font-medium">تدريب شخصي</p>
+                </div>
+                
+                <div class="border-b border-border pb-4 mb-4">
+                  <p class="text-sm text-text-secondary">المدرب</p>
+                  <p class="font-medium">أحمد محمد</p>
+                </div>
+                
+                <div class="border-b border-border pb-4 mb-4">
+                  <p class="text-sm text-text-secondary">التاريخ</p>
+                  <p class="font-medium">{{ selectedDate() || 'لم يُحدد' }}</p>
+                </div>
+                
+                <div class="border-b border-border pb-4 mb-4">
+                  <p class="text-sm text-text-secondary">الوقت</p>
+                  <p class="font-medium">{{ selectedTime() || 'لم يُحدد' }}</p>
+                </div>
+                
+                <div class="mb-6">
+                  <p class="text-sm text-text-secondary">السعر</p>
+                  <p class="text-2xl font-bold text-primary">200 ر.س</p>
+                </div>
+
+                <button (click)="confirmBooking()" [disabled]="!canBook()" class="btn-primary w-full py-3 disabled:opacity-50">
+                  تأكيد الحجز
+                </button>
               </div>
             </div>
           </div>
 
-          <!-- Booking Summary -->
-          <div>
-            <div class="card sticky top-24">
-              <h3 class="font-semibold mb-4">ملخص الحجز</h3>
-              
-              <div class="border-b border-border pb-4 mb-4">
-                <p class="text-sm text-text-secondary">الخدمة</p>
-                <p class="font-medium">تدريب شخصي</p>
-              </div>
-              
-              <div class="border-b border-border pb-4 mb-4">
-                <p class="text-sm text-text-secondary">المدرب</p>
-                <p class="font-medium">أحمد محمد</p>
-              </div>
-              
-              <div class="border-b border-border pb-4 mb-4">
-                <p class="text-sm text-text-secondary">التاريخ</p>
-                <p class="font-medium">18 أبريل 2026</p>
-              </div>
-              
-              <div class="border-b border-border pb-4 mb-4">
-                <p class="text-sm text-text-secondary">الوقت</p>
-                <p class="font-medium">10:00 صباحاً</p>
-              </div>
-              
-              <div class="mb-6">
-                <p class="text-sm text-text-secondary">السعر</p>
-                <p class="text-2xl font-bold text-primary">200 ر.س</p>
-              </div>
-
-              <button class="btn-primary w-full py-3">تأكيد الحجز</button>
+          <!-- My Bookings -->
+          <div class="mt-12">
+            <h2 class="text-2xl font-semibold mb-6">حجوزاتي</h2>
+            <div class="grid gap-4">
+              @for (booking of bookings(); track booking.id) {
+                <div class="card">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="font-semibold">{{ booking.serviceName }}</h3>
+                      <p class="text-sm text-text-secondary">{{ booking.providerName }} - {{ booking.date }} {{ booking.time }}</p>
+                    </div>
+                    <span [class]="booking.status === 'confirmed' ? 'bg-success/10 text-success' : 
+                                 booking.status === 'pending' ? 'bg-secondary/10 text-secondary' : 
+                                 'bg-error/10 text-error'" 
+                          class="px-3 py-1 rounded-full text-sm">
+                      {{ booking.status === 'confirmed' ? 'مؤكد' : booking.status === 'pending' ? 'قيد الانتظار' : 'ملغى' }}
+                    </span>
+                  </div>
+                </div>
+              } @empty {
+                <p class="text-text-secondary text-center py-8">لا توجد حجوزات سابقة</p>
+              }
             </div>
           </div>
-        </div>
+        }
       </div>
     </div>
   `
 })
-export class BookingComponent {
-  weekDays = ['أحد', 'إثن', 'ثلاث', 'أرب', 'خمي', 'جمع', 'سبت'];
-  
-  calendarDays = [
-    { day: 29, isCurrentMonth: false, isSelected: false, date: 1 },
-    { day: 30, isCurrentMonth: false, isSelected: false, date: 2 },
-    { day: 1, isCurrentMonth: true, isSelected: false, date: 3 },
-    { day: 2, isCurrentMonth: true, isSelected: true, date: 4 },
-    { day: 3, isCurrentMonth: true, isSelected: false, date: 5 },
-    { day: 4, isCurrentMonth: true, isSelected: false, date: 6 },
-    { day: 5, isCurrentMonth: true, isSelected: false, date: 7 },
-    { day: 6, isCurrentMonth: true, isSelected: false, date: 8 },
-    { day: 7, isCurrentMonth: true, isSelected: false, date: 9 },
-    { day: 8, isCurrentMonth: true, isSelected: false, date: 10 },
-    { day: 9, isCurrentMonth: true, isSelected: false, date: 11 },
-    { day: 10, isCurrentMonth: true, isSelected: false, date: 12 },
-    { day: 11, isCurrentMonth: true, isSelected: false, date: 13 },
-    { day: 12, isCurrentMonth: true, isSelected: false, date: 14 },
-    { day: 13, isCurrentMonth: true, isSelected: false, date: 15 },
-    { day: 14, isCurrentMonth: true, isSelected: false, date: 16 },
-    { day: 15, isCurrentMonth: true, isSelected: false, date: 17 },
-    { day: 16, isCurrentMonth: true, isSelected: false, date: 18 },
-    { day: 17, isCurrentMonth: true, isSelected: false, date: 19 },
-    { day: 18, isCurrentMonth: true, isSelected: false, date: 20 },
-    { day: 19, isCurrentMonth: true, isSelected: false, date: 21 },
-    { day: 20, isCurrentMonth: true, isSelected: false, date: 22 },
-    { day: 21, isCurrentMonth: true, isSelected: false, date: 23 },
-    { day: 22, isCurrentMonth: true, isSelected: false, date: 24 },
-    { day: 23, isCurrentMonth: true, isSelected: false, date: 25 },
-    { day: 24, isCurrentMonth: true, isSelected: false, date: 26 },
-    { day: 25, isCurrentMonth: true, isSelected: false, date: 27 },
-    { day: 26, isCurrentMonth: true, isSelected: false, date: 28 },
-    { day: 27, isCurrentMonth: true, isSelected: false, date: 29 },
-    { day: 28, isCurrentMonth: true, isSelected: false, date: 30 },
-    { day: 29, isCurrentMonth: true, isSelected: false, date: 1 },
-    { day: 30, isCurrentMonth: true, isSelected: false, date: 2 },
-  ];
+export class BookingComponent implements OnInit {
+  loading = signal(true);
+  bookings = signal<Booking[]>([]);
+  availableSlots = signal<TimeSlot[]>([]);
+  selectedDate = signal<string>('');
+  selectedTime = signal<string>('');
 
-  timeSlots = [
-    { time: '08:00 ص', isAvailable: true, isSelected: false },
-    { time: '09:00 ص', isAvailable: true, isSelected: false },
-    { time: '10:00 ص', isAvailable: true, isSelected: true },
-    { time: '11:00 ص', isAvailable: true, isSelected: false },
-    { time: '12:00 م', isAvailable: false, isSelected: false },
-    { time: '01:00 م', isAvailable: true, isSelected: false },
-    { time: '02:00 م', isAvailable: true, isSelected: false },
-    { time: '03:00 م', isAvailable: false, isSelected: false },
-    { time: '04:00 م', isAvailable: true, isSelected: false },
-    { time: '05:00 م', isAvailable: true, isSelected: false },
-    { time: '06:00 م', isAvailable: true, isSelected: false },
-    { time: '07:00 م', isAvailable: true, isSelected: false },
-  ];
+  currentDate = new Date();
+  currentYear = this.currentDate.getFullYear();
+  currentMonth = this.currentDate.getMonth();
+  
+  weekDays = ['أحد', 'إثن', 'ثلاث', 'أرب', 'خمي', 'جمع', 'سبت'];
+  calendarDays: CalendarDay[] = [];
+
+  monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  get currentMonthName() { return this.monthNames[this.currentMonth]; }
+
+  constructor(private bookingService: BookingService) {
+    this.generateCalendar();
+  }
+
+  ngOnInit() {
+    this.loadBookings();
+  }
+
+  loadBookings() {
+    this.bookingService.getUserBookings().subscribe({
+      next: (data) => {
+        this.bookings.set(data);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+      }
+    });
+  }
+
+  generateCalendar() {
+    const firstDay = new Date(this.currentYear, this.currentMonth, 1);
+    const lastDay = new Date(this.currentYear, this.currentMonth + 1, 0);
+    const startDay = firstDay.getDay();
+    const totalDays = lastDay.getDate();
+
+    this.calendarDays = [];
+
+    const prevMonth = new Date(this.currentYear, this.currentMonth, 0);
+    for (let i = startDay - 1; i >= 0; i--) {
+      this.calendarDays.push({
+        day: prevMonth.getDate() - i,
+        isCurrentMonth: false,
+        isSelected: false,
+        date: ''
+      });
+    }
+
+    for (let i = 1; i <= totalDays; i++) {
+      const date = new Date(this.currentYear, this.currentMonth, i);
+      const dateStr = date.toISOString().split('T')[0];
+      this.calendarDays.push({
+        day: i,
+        isCurrentMonth: true,
+        isSelected: dateStr === this.selectedDate(),
+        date: dateStr
+      });
+    }
+
+    const remaining = 42 - this.calendarDays.length;
+    for (let i = 1; i <= remaining; i++) {
+      this.calendarDays.push({
+        day: i,
+        isCurrentMonth: false,
+        isSelected: false,
+        date: ''
+      });
+    }
+  }
+
+  previousMonth() {
+    this.currentMonth--;
+    if (this.currentMonth < 0) {
+      this.currentMonth = 11;
+      this.currentYear--;
+    }
+    this.generateCalendar();
+  }
+
+  nextMonth() {
+    this.currentMonth++;
+    if (this.currentMonth > 11) {
+      this.currentMonth = 0;
+      this.currentYear++;
+    }
+    this.generateCalendar();
+  }
+
+  selectDate(day: CalendarDay) {
+    if (!day.isCurrentMonth || !day.date) return;
+    
+    this.selectedDate.set(day.date);
+    this.selectedTime.set('');
+    
+    this.calendarDays = this.calendarDays.map(d => ({
+      ...d,
+      isSelected: d.date === day.date
+    }));
+
+    this.loadSlots(day.date);
+  }
+
+  loadSlots(date: string) {
+    this.availableSlots.set([
+      { time: '08:00 ص', isAvailable: true, isSelected: false },
+      { time: '09:00 ص', isAvailable: true, isSelected: false },
+      { time: '10:00 ص', isAvailable: true, isSelected: false },
+      { time: '11:00 ص', isAvailable: true, isSelected: false },
+      { time: '12:00 م', isAvailable: false, isSelected: false },
+      { time: '01:00 م', isAvailable: true, isSelected: false },
+      { time: '02:00 م', isAvailable: true, isSelected: false },
+      { time: '03:00 م', isAvailable: false, isSelected: false },
+      { time: '04:00 م', isAvailable: true, isSelected: false },
+      { time: '05:00 م', isAvailable: true, isSelected: false },
+      { time: '06:00 م', isAvailable: true, isSelected: false },
+      { time: '07:00 م', isAvailable: true, isSelected: false },
+    ]);
+  }
+
+  selectSlot(slot: TimeSlot) {
+    if (!slot.isAvailable) return;
+    
+    this.selectedTime.set(slot.time);
+    this.availableSlots.set(
+      this.availableSlots().map(s => ({
+        ...s,
+        isSelected: s.time === slot.time
+      }))
+    );
+  }
+
+  canBook() {
+    return this.selectedDate() && this.selectedTime();
+  }
+
+  confirmBooking() {
+    if (!this.canBook()) return;
+
+    this.bookingService.createBooking({
+      serviceId: '1',
+      serviceType: 'coach',
+      date: this.selectedDate(),
+      time: this.selectedTime()
+    }).subscribe({
+      next: (booking) => {
+        this.bookings.update(b => [...b, booking]);
+        this.selectedDate.set('');
+        this.selectedTime.set('');
+        alert('تم تأكيد الحجز بنجاح!');
+      },
+      error: () => {
+        alert('فشل تأكيد الحجز. الرجاء المحاولة مرة أخرى');
+      }
+    });
+  }
 }
