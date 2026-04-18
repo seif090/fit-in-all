@@ -85,13 +85,13 @@ import { UserService, Subscription } from '../../../core/services/user.service';
                 </div>
                 <span class="text-text-secondary">→</span>
               </a>
-              <button class="flex items-center justify-between py-4 hover:text-primary w-full">
+              <a routerLink="/profile/settings" class="flex items-center justify-between py-4 hover:text-primary cursor-pointer">
                 <div class="flex items-center gap-4">
                   <span class="text-2xl">⚙️</span>
                   <span class="font-medium">الإعدادات</span>
                 </div>
                 <span class="text-text-secondary">→</span>
-              </button>
+              </a>
               <button class="flex items-center justify-between py-4 hover:text-primary w-full">
                 <div class="flex items-center gap-4">
                   <span class="text-2xl">❓</span>

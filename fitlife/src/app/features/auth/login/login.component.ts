@@ -41,7 +41,7 @@ import { AuthService } from '../../../core/services/auth.service';
                 <input type="checkbox" [(ngModel)]="rememberMe" name="rememberMe" class="w-4 h-4 text-primary" />
                 <span class="text-sm">تذكرني</span>
               </label>
-              <a class="text-sm text-primary hover:underline">نسيت كلمة المرور؟</a>
+              <a routerLink="/auth/forgot-password" class="text-sm text-primary hover:underline">نسيت كلمة المرور؟</a>
             </div>
 
             <button type="submit" [disabled]="loading()" class="btn-primary w-full disabled:opacity-50">

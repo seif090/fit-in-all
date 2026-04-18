@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ChatService } from '../../../core/services/chat.service';
 
 interface Message {
   id: number;
@@ -23,21 +24,32 @@ interface Message {
           </div>
           <div>
             <h1 class="font-semibold">المساعد الذكي</h1>
-            <p class="text-sm text-text-secondary">متاح الآن</p>
+            <p class="text-sm text-text-secondary">{{ aiTyping() ? 'يكتب...' : 'متاح الآن' }}</p>
           </div>
         </div>
       </div>
 
       <!-- Messages -->
-      <div class="flex-1 overflow-y-auto p-4">
+      <div class="flex-1 overflow-y-auto p-4" #chatContainer>
         <div class="max-w-3xl mx-auto space-y-4">
-          @for (msg of messages; track msg.id) {
+          @for (msg of messages(); track msg.id) {
             <div [class]="msg.isUser ? 'flex justify-end' : 'flex justify-start'">
               <div [class]="msg.isUser 
                 ? 'bg-primary text-white rounded-xl rounded-br-none px-4 py-3 max-w-xs lg:max-w-md' 
                 : 'bg-white text-text-primary rounded-xl rounded-bl-none px-4 py-3 max-w-xs lg:max-w-md shadow-sm'">
-                <p class="leading-relaxed">{{msg.text}}</p>
+                <p class="leading-relaxed whitespace-pre-line">{{msg.text}}</p>
                 <p [class]="msg.isUser ? 'text-white/70 text-xs mt-1' : 'text-text-secondary text-xs mt-1'">{{msg.time}}</p>
+              </div>
+            </div>
+          }
+          @if (aiTyping()) {
+            <div class="flex justify-start">
+              <div class="bg-white text-text-primary rounded-xl rounded-bl-none px-4 py-3 shadow-sm">
+                <div class="flex gap-1">
+                  <span class="w-2 h-2 bg-primary rounded-full animate-bounce"></span>
+                  <span class="w-2 h-2 bg-primary rounded-full animate-bounce" style="animation-delay: 0.1s"></span>
+                  <span class="w-2 h-2 bg-primary rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
+                </div>
               </div>
             </div>
           }
@@ -47,9 +59,9 @@ interface Message {
       <!-- Quick Questions -->
       <div class="px-4 py-2 border-t border-border bg-surface">
         <div class="max-w-3xl mx-auto flex gap-2 overflow-x-auto pb-2">
-          @for (q of quickQuestions; track q) {
+          @for (q of chatService.getQuickResponses(); track q) {
             <button (click)="sendQuickQuestion(q)" 
-                    class="whitespace-nowrap px-4 py-2 bg-background rounded-full text-sm hover:bg-primary/10 transition">
+                    class="whitespace-nowrap px-4 py-2 bg-background rounded-full text-sm hover:bg-primary/10 transition cursor-pointer">
               {{q}}
             </button>
           }
@@ -60,9 +72,11 @@ interface Message {
       <div class="p-4 bg-surface border-t border-border">
         <div class="max-w-3xl mx-auto flex gap-2">
           <input type="text" [(ngModel)]="newMessage" (keyup.enter)="sendMessage()"
-                 placeholder="اكتب رسالتك..."
+                 placeholder="اكتب رسالتك..." 
+                 [disabled]="aiTyping()"
                  class="flex-1 input" />
-          <button (click)="sendMessage()" class="btn-primary px-6">
+          <button (click)="sendMessage()" [disabled]="aiTyping() || !newMessage.trim()" 
+                  class="btn-primary px-6 disabled:opacity-50">
             <span>إرسال</span>
             <span class="mr-2">➤</span>
           </button>
@@ -71,44 +85,50 @@ interface Message {
     </div>
   `
 })
-export class ChatComponent {
-  messages: Message[] = [
-    { id: 1, text: 'مرحباً! أنا مساعدك الذكي في FitLife. كيف يمكنني مساعدتك اليوم؟', isUser: false, time: '10:00' },
-    { id: 2, text: 'أريد خطة تمرين للتنحيف', isUser: true, time: '10:01' },
-    { id: 3, text: 'سأقوم بإعداد خطة تمرين مخصصة لك. أولاً، كم مرة في الأسبوع يمكنك ممارسة التمارين؟', isUser: false, time: '10:02' },
-    { id: 4, text: '3 مرات في الأسبوع', isUser: true, 'time': '10:03' },
-    { id: 5, text: 'ممتاز! إليك خطة تمارين للتنحيف:\n\n• اليوم 1: تمارين cardio + بطن\n• اليوم 2: راحة\n• اليوم 3: تمارين قوة كامل الجسم\n• اليوم 4: راحة\n• اليوم 5: HIIT + stretching\n• اليوم 6-7: راحة\n\nهل تريد تفاصيل أكثر؟', isUser: false, time: '10:04' },
-  ];
-
-  newMessage = '';
+export class ChatComponent implements OnInit {
+  chatService = inject(ChatService);
   
-  quickQuestions = [
-    'خطة تمرين للتنحيف',
-    'نظام غذائي صحي',
-    'مكملات غذائية',
-    'تمارين البطن',
-  ];
+  messages = signal<Message[]>([]);
+  newMessage = '';
+  aiTyping = signal(false);
+
+  ngOnInit() {
+    const greeting = this.chatService.getInitialGreeting();
+    this.messages.set([{
+      id: 1,
+      text: greeting,
+      isUser: false,
+      time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
+    }]);
+  }
 
   sendMessage() {
-    if (!this.newMessage.trim()) return;
+    if (!this.newMessage.trim() || this.aiTyping()) return;
     
-    this.messages.push({
-      id: this.messages.length + 1,
-      text: this.newMessage,
+    const userMessage = this.newMessage;
+    
+    this.messages.update(msgs => [...msgs, {
+      id: Date.now(),
+      text: userMessage,
       isUser: true,
       time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
-    });
+    }]);
     
     this.newMessage = '';
-    
+    this.aiTyping.set(true);
+
     setTimeout(() => {
-      this.messages.push({
-        id: this.messages.length + 1,
-        text: 'شكراً لرسالتك! أنا أعمل على الإجابة...',
+      const response = this.chatService.generateSimpleResponse(userMessage);
+      
+      this.messages.update(msgs => [...msgs, {
+        id: Date.now() + 1,
+        text: response,
         isUser: false,
         time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
-      });
-    }, 1000);
+      }]);
+      
+      this.aiTyping.set(false);
+    }, 1500);
   }
 
   sendQuickQuestion(q: string) {

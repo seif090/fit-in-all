@@ -20,9 +20,11 @@ export interface Coach {
   name: string;
   specialty: string;
   rating: number;
+  reviews: number;
   price: number;
   image: string;
   category: string;
+  bio?: string;
 }
 
 export interface Doctor {
@@ -30,9 +32,11 @@ export interface Doctor {
   name: string;
   specialty: string;
   rating: number;
+  reviews: number;
   price: number;
   image: string;
   category: string;
+  bio?: string;
 }
 
 export interface Product {
