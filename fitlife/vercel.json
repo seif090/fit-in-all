@@ -1,0 +1,7 @@
+{
+  "buildCommand": "ng build --configuration=production",
+  "outputDirectory": "dist/fitlife/browser",
+  "framework": "angular",
+  "devCommand": "ng serve",
+  "installCommand": "npm install"
+}
